@@ -97,6 +97,15 @@ st.title("Financial Intelligence, Unleashed")
 st.write("Powered by Tiger’s advanced analytics to bring you institutional-grade market insights in real time.")
 st.markdown("---")
 
+st.markdown("""
+    <style>
+    /* Target the text inside Streamlit buttons to make it smaller */
+    div[data-testid="stButton"] button p {
+        font-size: 14px !important; /* Change this number to make it bigger/smaller */
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # 1. Initialize chat history and button state
 if "messages" not in st.session_state:
     st.session_state.messages = []
