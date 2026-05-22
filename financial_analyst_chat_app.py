@@ -114,40 +114,38 @@ if "active_prompt" not in st.session_state:
     st.session_state.active_prompt = None
 
 prompt = None
-
 # 2. Suggested Questions
-# Only show if there are no messages AND no button has just been clicked
 if not st.session_state.messages and not st.session_state.active_prompt:
     
-    # CUSTOM FONT SIZE FOR HEADER
     st.markdown("<p style='font-size: 15px; font-weight: 600; color: #555; margin-bottom: 5px;'>💡 Suggested Questions:</p>", unsafe_allow_html=True)
     
     row1_col1, row1_col2, row1_col3 = st.columns(3)
-    if row1_col1.button("What is our Total Revenue?", use_container_width=True):
+    # Notice we removed use_container_width=True from all buttons below!
+    if row1_col1.button("What is our Total Revenue?"):
         st.session_state.active_prompt = "What is our Total Revenue?"
         st.rerun()
         
-    if row1_col2.button("How many leads converted last month?", use_container_width=True):
+    if row1_col2.button("How many leads converted last month?"):
         st.session_state.active_prompt = "How many leads converted last month?"
         st.rerun()
         
-    if row1_col3.button("Who are our top 5 sales reps?", use_container_width=True):
+    if row1_col3.button("Who are our top 5 sales reps?"):
         st.session_state.active_prompt = "Who are our top 5 sales reps?"
         st.rerun()
     
     row2_col1, row2_col2, row2_col3 = st.columns(3)
-    if row2_col1.button("What is the Cost Per Lead (CPL)?", use_container_width=True):
+    if row2_col1.button("What is the Cost Per Lead (CPL)?"):
         st.session_state.active_prompt = "What is the Cost Per Lead (CPL) for each campaign?"
         st.rerun()
         
-    if row2_col2.button("Calculate ROMI by Region", use_container_width=True):
+    if row2_col2.button("Calculate ROMI by Region"):
         st.session_state.active_prompt = "Calculate Return on Marketing Investment (ROMI) by Region"
         st.rerun()
         
-    if row2_col3.button("Identify CAC for converted leads", use_container_width=True):
+    if row2_col3.button("Identify CAC for converted leads"):
         st.session_state.active_prompt = "Identify Customer Acquisition Cost (CAC) for converted leads"
         st.rerun()
-
+        
 # 3. Standard Chat Input
 chat_input = st.chat_input("Ask a question about your data...")
 
