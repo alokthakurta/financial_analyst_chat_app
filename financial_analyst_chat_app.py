@@ -101,7 +101,7 @@ st.markdown("""
     <style>
     /* Target the text inside Streamlit buttons to make it smaller */
     div[data-testid="stButton"] button p {
-        font-size: 11px !important; /* Change this number to make it bigger/smaller */
+        font-size: 8px !important; /* Change this number to make it bigger/smaller */
     }
     </style>
 """, unsafe_allow_html=True)
