@@ -5,7 +5,6 @@ import yaml
 import json
 
 # --- SECURE CONFIGURATION ---
-# These will be populated by Streamlit Cloud's Secrets Manager
 DSS_HOST = st.secrets["DSS_HOST"]
 DSS_API_KEY = st.secrets["DSS_API_KEY"]
 PROJECT_KEY = st.secrets["PROJECT_KEY"]
@@ -21,7 +20,6 @@ project = client.get_project(PROJECT_KEY)
 def load_latest_ontology():
     try:
         folder = project.get_managed_folder(FOLDER_ID)
-        # Download the file via REST API
         file_stream = folder.get_file("ontology.yaml")
         ontology_data = yaml.safe_load(file_stream.content)
         return ontology_data
@@ -30,7 +28,8 @@ def load_latest_ontology():
         return None
 
 # --- LLM INTEGRATION (EXTERNAL) ---
-def generate_sql(question, ontology):
+def generate_sql_and_description(question, ontology):
+    """Calls the LLM to generate SQL and a description, formatted strictly as JSON."""
     ontology_str = json.dumps(ontology, indent=2)
     prompt = f"""
     You are an expert SQL assistant. 
@@ -38,7 +37,19 @@ def generate_sql(question, ontology):
     {ontology_str}
     
     Based ONLY on the provided ontology, write a SQL query to answer the following question. 
-    Return ONLY the raw SQL query, no markdown, no explanations.
+    You must ALSO provide a brief, human-readable description explaining how the query works.
+    
+    CRITICAL INSTRUCTIONS:
+    1. Output ONLY a valid JSON object.
+    2. The JSON object must have exactly two keys: "sql" and "description".
+    3. Do not include markdown formatting blocks like ```json or ```sql.
+    4. Do not include any conversational text outside the JSON object.
+    
+    Example Output format:
+    {{
+      "sql": "SELECT SUM(amount) FROM sales WHERE status = 'Won';",
+      "description": "This query calculates the total revenue by summing the amount column in the sales table for all 'Won' deals."
+    }}
     
     Question: {question}
     """
@@ -58,26 +69,19 @@ def generate_sql(question, ontology):
 # --- SQL EXECUTION (EXTERNAL VIA API) ---
 def execute_generated_sql(sql_query):
     try:
-        # We proxy the query through Dataiku's REST API using the connection name
         query_runner = client.sql_query(sql_query, connection=CONNECTION_NAME)
-        
-        # Extract schema to build pandas columns
         schema = query_runner.get_schema()
         
-        # Check if schema is a dictionary or directly a list
         if isinstance(schema, dict) and 'columns' in schema:
             columns = [col['name'] for col in schema['columns']]
         else:
             columns = [col['name'] for col in schema]
         
-        # Fetch the data row by row
         data = []
         for row in query_runner.iter_rows():
             data.append(row)
             
-        query_runner.verify() # Verifies stream completed successfully
-        
-        # Convert to DataFrame
+        query_runner.verify() 
         df = pd.DataFrame(data, columns=columns)
         return df, None
     except Exception as e:
@@ -89,14 +93,13 @@ st.title("Financial Intelligence, Unleashed")
 st.write("Powered by Tiger’s advanced analytics to bring you institutional-grade market insights in real time.")
 st.markdown("---")
 
-# 1. Initialize chat history in session state
+# 1. Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Variable to hold the user's query, whether from a button or chat input
 prompt = None
 
-# 2. Suggested Questions (Only show if chat history is empty)
+# 2. Suggested Questions
 if not st.session_state.messages:
     st.write("**💡 Suggested Questions:**")
     
@@ -125,41 +128,56 @@ if chat_input:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
+        if "description" in message:
+            st.info(f"**Query Description:** {message['description']}")
         if "sql" in message:
             st.code(message["sql"], language="sql")
         if "df" in message and isinstance(message["df"], pd.DataFrame):
             st.dataframe(message["df"])
 
-# 5. React to user input (either from chat box or suggested buttons)
+# 5. React to user input
 if prompt:
-    # Display user message in chat container
     st.chat_message("user").markdown(prompt)
-    # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Generate and display assistant response
     with st.chat_message("assistant"):
         with st.spinner("Fetching ontology and generating SQL..."):
             current_ontology = load_latest_ontology()
             
             if current_ontology:
-                # Generate raw response
-                raw_llm_output = generate_sql(prompt, current_ontology)
+                # Generate raw JSON response from LLM
+                raw_llm_output = generate_sql_and_description(prompt, current_ontology)
                 
-                # Clean the output to remove Markdown backticks
-                sql_query = raw_llm_output.strip()
-                if sql_query.startswith("```sql"):
-                    sql_query = sql_query[6:]
-                elif sql_query.startswith("```"):
-                    sql_query = sql_query[3:]
-                if sql_query.endswith("```"):
-                    sql_query = sql_query[:-3]
-                sql_query = sql_query.strip()
-                
-                st.markdown("**Generated SQL Query:**")
-                st.code(sql_query, language="sql")
-                
-                if not raw_llm_output.startswith("Error"):
+                if raw_llm_output.startswith("Error"):
+                    st.error(raw_llm_output)
+                    st.session_state.messages.append({"role": "assistant", "content": raw_llm_output})
+                else:
+                    # Clean the output of Markdown backticks just in case
+                    cleaned_output = raw_llm_output.strip()
+                    if cleaned_output.startswith("```json"):
+                        cleaned_output = cleaned_output[7:]
+                    elif cleaned_output.startswith("```"):
+                        cleaned_output = cleaned_output[3:]
+                    if cleaned_output.endswith("```"):
+                        cleaned_output = cleaned_output[:-3]
+                    cleaned_output = cleaned_output.strip()
+                    
+                    # Parse the JSON output safely
+                    try:
+                        response_data = json.loads(cleaned_output)
+                        sql_query = response_data.get("sql", "")
+                        sql_description = response_data.get("description", "No description provided.")
+                    except json.JSONDecodeError:
+                        st.error("Failed to parse LLM response as JSON. Showing raw output instead.")
+                        sql_query = cleaned_output
+                        sql_description = "Parsing error: Could not extract description."
+                    
+                    # Display the newly added description
+                    st.info(f"**Query Description:** {sql_description}")
+                    
+                    st.markdown("**Generated SQL Query:**")
+                    st.code(sql_query, language="sql")
+                    
                     with st.spinner("Executing query remotely..."):
                         results_df, error_msg = execute_generated_sql(sql_query)
                         
@@ -169,6 +187,7 @@ if prompt:
                             st.session_state.messages.append({
                                 "role": "assistant", 
                                 "content": error_text,
+                                "description": sql_description,
                                 "sql": sql_query
                             })
                         elif results_df is not None:
@@ -178,6 +197,7 @@ if prompt:
                                 st.session_state.messages.append({
                                     "role": "assistant", 
                                     "content": empty_msg,
+                                    "description": sql_description,
                                     "sql": sql_query
                                 })
                             else:
@@ -185,6 +205,7 @@ if prompt:
                                 st.session_state.messages.append({
                                     "role": "assistant", 
                                     "content": "Here are your results:",
+                                    "description": sql_description,
                                     "sql": sql_query,
                                     "df": results_df
                                 })
