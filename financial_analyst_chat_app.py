@@ -93,7 +93,7 @@ def execute_generated_sql(sql_query):
 
 
 # --- STREAMLIT UI (CHAT AGENT) ---
-st.title("Financial Intelligence, Unleashed. 🤖")
+st.title("Financial Intelligence, Unleashed")
 st.write("Powered by Tiger’s advanced analytics to bring you institutional-grade market insights in real time.")
 st.markdown("---")
 
