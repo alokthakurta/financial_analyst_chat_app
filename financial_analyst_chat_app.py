@@ -100,24 +100,39 @@ if "messages" not in st.session_state:
 prompt = None
 
 # 2. Suggested Questions
+suggestion_container = st.empty() # Create an empty placeholder
+
 if not st.session_state.messages:
-    st.write("**💡 Suggested Questions:**")
+    # Render the buttons inside the placeholder
+    with suggestion_container.container():
+        st.write("**💡 Suggested Questions:**")
+        
+        row1_col1, row1_col2, row1_col3 = st.columns(3)
+        if row1_col1.button("What is our Total Revenue?", use_container_width=True):
+            prompt = "What is our Total Revenue?"
+            suggestion_container.empty() # Instantly clear the UI container!
+            
+        if row1_col2.button("How many leads converted last month?", use_container_width=True):
+            prompt = "How many leads converted last month?"
+            suggestion_container.empty()
+            
+        if row1_col3.button("Who are our top 5 sales reps?", use_container_width=True):
+            prompt = "Who are our top 5 sales reps?"
+            suggestion_container.empty()
+        
+        row2_col1, row2_col2, row2_col3 = st.columns(3)
+        if row2_col1.button("What is the Cost Per Lead (CPL)?", use_container_width=True):
+            prompt = "What is the Cost Per Lead (CPL) for each campaign?"
+            suggestion_container.empty()
+            
+        if row2_col2.button("Calculate ROMI by Region", use_container_width=True):
+            prompt = "Calculate Return on Marketing Investment (ROMI) by Region"
+            suggestion_container.empty()
+            
+        if row2_col3.button("Identify CAC for converted leads", use_container_width=True):
+            prompt = "Identify Customer Acquisition Cost (CAC) for converted leads"
+            suggestion_container.empty()
     
-    row1_col1, row1_col2, row1_col3 = st.columns(3)
-    if row1_col1.button("What is our Total Revenue?", use_container_width=True):
-        prompt = "What is our Total Revenue?"
-    if row1_col2.button("How many leads converted last month?", use_container_width=True):
-        prompt = "How many leads converted last month?"
-    if row1_col3.button("Who are our top 5 sales reps?", use_container_width=True):
-        prompt = "Who are our top 5 sales reps?"
-    
-    row2_col1, row2_col2, row2_col3 = st.columns(3)
-    if row2_col1.button("What is the Cost Per Lead (CPL)?", use_container_width=True):
-        prompt = "What is the Cost Per Lead (CPL) for each campaign?"
-    if row2_col2.button("Calculate ROMI by Region", use_container_width=True):
-        prompt = "Calculate Return on Marketing Investment (ROMI) by Region"
-    if row2_col3.button("Identify CAC for converted leads", use_container_width=True):
-        prompt = "Identify Customer Acquisition Cost (CAC) for converted leads"
 
 # 3. Standard Chat Input
 chat_input = st.chat_input("Ask a question about your data...")
