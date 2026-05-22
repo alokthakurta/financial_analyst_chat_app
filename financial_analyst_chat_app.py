@@ -29,7 +29,7 @@ def load_latest_ontology():
 
 # --- LLM INTEGRATION (EXTERNAL) ---
 def generate_sql_and_description(question, ontology):
-    """Calls the LLM to generate SQL and a description, formatted strictly as JSON."""
+    """Calls the LLM to generate SQL, a description, and connected questions as JSON."""
     ontology_str = json.dumps(ontology, indent=2)
     prompt = f"""
     You are an expert SQL assistant. 
@@ -37,18 +37,22 @@ def generate_sql_and_description(question, ontology):
     {ontology_str}
     
     Based ONLY on the provided ontology, write a SQL query to answer the following question. 
-    You must ALSO provide a brief, human-readable description explaining how the query works.
+    You must ALSO provide a brief description explaining how the query works, AND suggest 2-3 logical follow-up questions the user might want to ask next.
     
     CRITICAL INSTRUCTIONS:
     1. Output ONLY a valid JSON object.
-    2. The JSON object must have exactly two keys: "sql" and "description".
-    3. Do not include markdown formatting blocks like ```json or ```sql.
-    4. Do not include any conversational text outside the JSON object.
+    2. The JSON object must have exactly three keys: "sql", "description", and "connected_questions".
+    3. "connected_questions" must be a list of strings.
+    4. Do not include markdown formatting blocks like ```json or ```sql.
     
     Example Output format:
     {{
       "sql": "SELECT SUM(amount) FROM sales WHERE status = 'Won';",
-      "description": "This query calculates the total revenue by summing the amount column in the sales table for all 'Won' deals."
+      "description": "This query calculates the total revenue by summing the amount column in the sales table for all 'Won' deals.",
+      "connected_questions": [
+        "What is the total revenue broken down by region?",
+        "How does this revenue compare to the previous quarter?"
+      ]
     }}
     
     Question: {question}
@@ -89,9 +93,10 @@ def execute_generated_sql(sql_query):
 
 
 # --- STREAMLIT UI (CHAT AGENT) ---
-st.title("Financial Intelligence, Unleashed")
+st.title("Financial Intelligence, Unleashed. 🤖")
 st.write("Powered by Tiger’s advanced analytics to bring you institutional-grade market insights in real time.")
 st.markdown("---")
+
 # 1. Initialize chat history and button state
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -104,7 +109,9 @@ prompt = None
 # 2. Suggested Questions
 # Only show if there are no messages AND no button has just been clicked
 if not st.session_state.messages and not st.session_state.active_prompt:
-    st.write("**💡 Suggested Questions:**")
+    
+    # CUSTOM FONT SIZE FOR HEADER
+    st.markdown("<p style='font-size: 15px; font-weight: 600; color: #555; margin-bottom: 5px;'>💡 Suggested Questions:</p>", unsafe_allow_html=True)
     
     row1_col1, row1_col2, row1_col3 = st.columns(3)
     if row1_col1.button("What is our Total Revenue?", use_container_width=True):
@@ -140,7 +147,6 @@ if chat_input:
     prompt = chat_input
 elif st.session_state.active_prompt:
     prompt = st.session_state.active_prompt
-    # Clear the active prompt so it doesn't get stuck in a loop
     st.session_state.active_prompt = None 
 
 # 4. Display historical chat messages on app rerun
@@ -153,6 +159,16 @@ for message in st.session_state.messages:
             st.code(message["sql"], language="sql")
         if "df" in message and isinstance(message["df"], pd.DataFrame):
             st.dataframe(message["df"])
+        
+        # RENDER CONNECTED QUESTIONS WITH SMALLER FONT
+        if "connected_questions" in message and message["connected_questions"]:
+            questions_html = "<br>".join([f"• <i>{q}</i>" for q in message["connected_questions"]])
+            styled_html = f"""
+            <div style='font-size: 13px; color: #666; margin-top: 10px; padding-left: 5px; border-left: 2px solid #ccc;'>
+                <b>🔗 Connected Questions to try:</b><br>{questions_html}
+            </div>
+            """
+            st.markdown(styled_html, unsafe_allow_html=True)
 
 # 5. React to user input
 if prompt:
@@ -171,7 +187,7 @@ if prompt:
                     st.error(raw_llm_output)
                     st.session_state.messages.append({"role": "assistant", "content": raw_llm_output})
                 else:
-                    # Clean the output of Markdown backticks just in case
+                    # Clean the output
                     cleaned_output = raw_llm_output.strip()
                     if cleaned_output.startswith("```json"):
                         cleaned_output = cleaned_output[7:]
@@ -181,15 +197,17 @@ if prompt:
                         cleaned_output = cleaned_output[:-3]
                     cleaned_output = cleaned_output.strip()
                     
-                    # Parse the JSON output safely
+                    # Parse JSON
                     try:
                         response_data = json.loads(cleaned_output)
                         sql_query = response_data.get("sql", "")
                         sql_description = response_data.get("description", "No description provided.")
+                        connected_questions = response_data.get("connected_questions", [])
                     except json.JSONDecodeError:
                         st.error("Failed to parse LLM response as JSON. Showing raw output instead.")
                         sql_query = cleaned_output
                         sql_description = "Parsing error: Could not extract description."
+                        connected_questions = []
                     
                     # Display the newly added description
                     st.info(f"**Query Description:** {sql_description}")
@@ -200,6 +218,7 @@ if prompt:
                     with st.spinner("Executing query remotely..."):
                         results_df, error_msg = execute_generated_sql(sql_query)
                         
+                        # Save state based on execution success/failure
                         if error_msg:
                             error_text = f"SQL Execution Error: {error_msg}"
                             st.error(error_text)
@@ -207,7 +226,8 @@ if prompt:
                                 "role": "assistant", 
                                 "content": error_text,
                                 "description": sql_description,
-                                "sql": sql_query
+                                "sql": sql_query,
+                                "connected_questions": connected_questions
                             })
                         elif results_df is not None:
                             if results_df.empty:
@@ -217,7 +237,8 @@ if prompt:
                                     "role": "assistant", 
                                     "content": empty_msg,
                                     "description": sql_description,
-                                    "sql": sql_query
+                                    "sql": sql_query,
+                                    "connected_questions": connected_questions
                                 })
                             else:
                                 st.dataframe(results_df) 
@@ -226,5 +247,16 @@ if prompt:
                                     "content": "Here are your results:",
                                     "description": sql_description,
                                     "sql": sql_query,
-                                    "df": results_df
+                                    "df": results_df,
+                                    "connected_questions": connected_questions
                                 })
+                                
+                        # Print the connected questions for the current run
+                        if connected_questions:
+                            questions_html = "<br>".join([f"• <i>{q}</i>" for q in connected_questions])
+                            styled_html = f"""
+                            <div style='font-size: 13px; color: #666; margin-top: 10px; padding-left: 5px; border-left: 2px solid #ccc;'>
+                                <b>🔗 Connected Questions to try:</b><br>{questions_html}
+                            </div>
+                            """
+                            st.markdown(styled_html, unsafe_allow_html=True)
