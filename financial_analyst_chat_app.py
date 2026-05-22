@@ -92,52 +92,56 @@ def execute_generated_sql(sql_query):
 st.title("Financial Intelligence, Unleashed")
 st.write("Powered by Tiger’s advanced analytics to bring you institutional-grade market insights in real time.")
 st.markdown("---")
-
-# 1. Initialize chat history
+# 1. Initialize chat history and button state
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+if "active_prompt" not in st.session_state:
+    st.session_state.active_prompt = None
 
 prompt = None
 
 # 2. Suggested Questions
-suggestion_container = st.empty() # Create an empty placeholder
-
-if not st.session_state.messages:
-    # Render the buttons inside the placeholder
-    with suggestion_container.container():
-        st.write("**💡 Suggested Questions:**")
-        
-        row1_col1, row1_col2, row1_col3 = st.columns(3)
-        if row1_col1.button("What is our Total Revenue?", use_container_width=True):
-            prompt = "What is our Total Revenue?"
-            suggestion_container.empty() # Instantly clear the UI container!
-            
-        if row1_col2.button("How many leads converted last month?", use_container_width=True):
-            prompt = "How many leads converted last month?"
-            suggestion_container.empty()
-            
-        if row1_col3.button("Who are our top 5 sales reps?", use_container_width=True):
-            prompt = "Who are our top 5 sales reps?"
-            suggestion_container.empty()
-        
-        row2_col1, row2_col2, row2_col3 = st.columns(3)
-        if row2_col1.button("What is the Cost Per Lead (CPL)?", use_container_width=True):
-            prompt = "What is the Cost Per Lead (CPL) for each campaign?"
-            suggestion_container.empty()
-            
-        if row2_col2.button("Calculate ROMI by Region", use_container_width=True):
-            prompt = "Calculate Return on Marketing Investment (ROMI) by Region"
-            suggestion_container.empty()
-            
-        if row2_col3.button("Identify CAC for converted leads", use_container_width=True):
-            prompt = "Identify Customer Acquisition Cost (CAC) for converted leads"
-            suggestion_container.empty()
+# Only show if there are no messages AND no button has just been clicked
+if not st.session_state.messages and not st.session_state.active_prompt:
+    st.write("**💡 Suggested Questions:**")
     
+    row1_col1, row1_col2, row1_col3 = st.columns(3)
+    if row1_col1.button("What is our Total Revenue?", use_container_width=True):
+        st.session_state.active_prompt = "What is our Total Revenue?"
+        st.rerun()
+        
+    if row1_col2.button("How many leads converted last month?", use_container_width=True):
+        st.session_state.active_prompt = "How many leads converted last month?"
+        st.rerun()
+        
+    if row1_col3.button("Who are our top 5 sales reps?", use_container_width=True):
+        st.session_state.active_prompt = "Who are our top 5 sales reps?"
+        st.rerun()
+    
+    row2_col1, row2_col2, row2_col3 = st.columns(3)
+    if row2_col1.button("What is the Cost Per Lead (CPL)?", use_container_width=True):
+        st.session_state.active_prompt = "What is the Cost Per Lead (CPL) for each campaign?"
+        st.rerun()
+        
+    if row2_col2.button("Calculate ROMI by Region", use_container_width=True):
+        st.session_state.active_prompt = "Calculate Return on Marketing Investment (ROMI) by Region"
+        st.rerun()
+        
+    if row2_col3.button("Identify CAC for converted leads", use_container_width=True):
+        st.session_state.active_prompt = "Identify Customer Acquisition Cost (CAC) for converted leads"
+        st.rerun()
 
 # 3. Standard Chat Input
 chat_input = st.chat_input("Ask a question about your data...")
+
+# Determine where the prompt came from (chat box or button)
 if chat_input:
     prompt = chat_input
+elif st.session_state.active_prompt:
+    prompt = st.session_state.active_prompt
+    # Clear the active prompt so it doesn't get stuck in a loop
+    st.session_state.active_prompt = None 
 
 # 4. Display historical chat messages on app rerun
 for message in st.session_state.messages:
